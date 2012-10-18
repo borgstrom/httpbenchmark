@@ -22,6 +22,7 @@ from tornado import ioloop, httpclient
 
 import collections
 import urllib2
+import urllib
 import logging
 import numpy
 import time
@@ -168,7 +169,7 @@ class HTTPBenchmark(object):
             ioloop.IOLoop.instance().stop()
             self.finish_run()
 
-    def open_url(self, url, callback=None, code=200, params_in_results=False):
+    def open_url(self, url, callback=None, code=200, params_in_results=False, **kwargs):
         """
         Opens a URL, recording the time it takes & return the response
 
@@ -199,9 +200,17 @@ class HTTPBenchmark(object):
                 # otherwise signal success
                 return self.finish_request(True)
 
-        self.client.fetch(url, handle_response)
+        self.client.fetch(url, handle_response, **kwargs)
 
-    def open_json(self, url, callback):
+    def get(self, url, callback=None, code=200, params_in_results=False):
+        return self.open_url(url, callback, code, params_in_results)
+
+    def post(self, url, params={}, callback=None, code=200):
+        return self.open_url(url, callback, code,
+                method="POST",
+                body=urllib.urlencode(params))
+
+    def get_json(self, url, callback):
         def handle_json(response):
             headers = response.headers
 
