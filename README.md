@@ -14,4 +14,11 @@ This allows you to implement specific testing logic while being
 able to generate a modest load.
 
 At a concurrency of 100 I am able to generate ~1000 req/sec without
-breaking a sweat.
+breaking a sweat on a modest server.
+
+
+TODO
+----
+
+* Add some examples
+* Upgrade Tornado
