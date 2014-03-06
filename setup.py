@@ -16,6 +16,7 @@ else:
 requirements = [
     'numpy>=1.6,<2.0',
     'tornado>=2.3,<3.0',
+    'pycurl>=7.19,<7.20'
 ]
 if sys.version_info < (2, 7):
     requirements.append('argparse')
