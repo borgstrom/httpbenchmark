@@ -268,15 +268,12 @@ class HTTPBenchmark(object):
         for x in xrange(self.args.number):
             # get_worker will return a callable
             worker = self.get_worker()
-            if self.iscallable(worker):
-                try:
-                    worker()
-                except Exception, e:
-                    self.log.error("worker raised an exception", e)
-                    raise
-            else:
-                self.log.error('get_worker didn\'t return a valid '
-                               'callable object: {0}'.format(worker))
+            try:
+                worker()
+            except TypeError:
+                self.log.error("get_worker did not return a callable object, "
+                               "fix your code!")
+                raise
 
         ioloop.IOLoop.instance().start()
 
