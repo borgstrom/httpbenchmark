@@ -202,10 +202,16 @@ class HTTPBenchmark(object):
     def get(self, url, callback=None, code=200, params_in_results=False):
         return self.open_url(url, callback, code, params_in_results)
 
-    def post(self, url, params={}, callback=None, code=200):
+    def post(self, url, params={}, callback=None, code=200,
+             php_urlencode=False):
+        if php_urlencode:
+            body = self.php_urlencode(params)
+        else:
+            body = urllib.urlencode(params)
+
         return self.open_url(url, callback, code,
                              method="POST",
-                             body=urllib.urlencode(params))
+                             body=body)
 
     def get_json(self, url, callback):
         def handle_json(response):
@@ -304,3 +310,30 @@ class HTTPBenchmark(object):
                 self.log.info("   %3s%% %6s" % (pcts[i], int(avgs[i] * 1000)))
 
             self.log.info("")
+
+    def php_urlencode(self, d):
+        """URL-encode a multidimensional dictionary.
+
+        >>> data = {'a': 'b&c', 'd': {'e': {'f&g': 'h*i'}}, 'j': 'k'}
+        >>> recursive_urlencode(data)
+        u'a=b%26c&j=k&d[e][f%26g]=h%2Ai'
+        """
+        def recursion(d, base=[]):
+            pairs = []
+
+            for key, value in d.items():
+                new_base = base + [key]
+                if hasattr(value, 'values'):
+                    pairs += recursion(value, new_base)
+                else:
+                    new_pair = None
+                    if len(new_base) > 1:
+                        first = urllib.quote(new_base.pop(0))
+                        rest = map(lambda x: urllib.quote(x), new_base)
+                        new_pair = "%s[%s]=%s" % (first, ']['.join(rest), urllib.quote(unicode(value)))
+                    else:
+                        new_pair = "%s=%s" % (urllib.quote(unicode(key)), urllib.quote(unicode(value)))
+                    pairs.append(new_pair)
+            return pairs
+
+        return '&'.join(recursion(d))
