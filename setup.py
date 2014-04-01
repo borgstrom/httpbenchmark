@@ -15,7 +15,7 @@ else:
 
 requirements = [
     'numpy>=1.6,<2.0',
-    'tornado>=2.3,<3.0',
+    'tornado>=3.2,<3.3',
     'pycurl>=7.19,<7.20'
 ]
 if sys.version_info < (2, 7):
@@ -34,7 +34,7 @@ setup(
     author_email='evan@borgstrom.ca',
     url='https://github.com/borgstrom/httpbenchmark',
     classifiers=[
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
         'Intended Audience :: System Administrators',
         'License :: OSI Approved :: Apache Software License',

@@ -1,0 +1,10 @@
+httpbenchmark changelog
+=======================
+
+Version 0.4
+Released: April 1st, 2014
+
+* Upgraded Tornado to 3.2
+* PEP8
+* Pythonic code refactoring (EAFP)
+* Added function to urlencode to PHP's nested syntax: a[b]=1

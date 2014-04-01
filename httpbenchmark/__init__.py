@@ -1,4 +1,4 @@
-__version__ = '0.3.3'
+__version__ = '0.4'
 __url__ = 'https://github.com/borgstrom/httpbenchmark'
 
-from .benchmark import HTTPBenchmark
+from .benchmark import HTTPBenchmark  # noqa

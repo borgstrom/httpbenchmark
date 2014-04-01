@@ -137,4 +137,3 @@ TODO
 ----
 
 * Add some working examples
-* Upgrade Tornado
