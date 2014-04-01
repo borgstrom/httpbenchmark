@@ -53,14 +53,18 @@ class HTTPBenchmark(object):
         self.log = logging.getLogger("HTTPBenchmark")
 
         # use the curl async http client from tornado
-        httpclient.AsyncHTTPClient.configure("tornado.curl_httpclient.CurlAsyncHTTPClient")
+        httpclient.AsyncHTTPClient.configure(
+            "tornado.curl_httpclient.CurlAsyncHTTPClient"
+        )
 
     def main(self):
         """
         Handles invocation
         """
         import argparse
-        parser = argparse.ArgumentParser(description='pb - Python HTTP benchmarking tool')
+        parser = argparse.ArgumentParser(
+            description='pb - Python HTTP benchmarking tool'
+        )
 
         # if our class is HTTPBenchmark then we expect that a URL
         # will be supplied to us as an argument, otherwise we have
@@ -83,7 +87,8 @@ class HTTPBenchmark(object):
                            help='The total number of requests to make')
         modes.add_argument('-T', '--time', dest='time', type=int,
                            metavar='SECONDS',
-                           help='The number of seconds to run at the specified concurrency')
+                           help='The number of seconds to run at the '
+                                'specified concurrency')
 
         # The main argument, how big our pool is
         parser.add_argument('-c', '--concurrent', dest='concurrent', type=int,
@@ -94,13 +99,16 @@ class HTTPBenchmark(object):
 
         if self.args.debug:
             logging.basicConfig(level=logging.DEBUG,
-                                format='%(asctime)s %(name)s %(levelname)s %(message)s')
+                                format='%(asctime)s %(name)s %(levelname)s '
+                                       '%(message)s')
         else:
             logging.basicConfig(level=logging.INFO,
                                 format='%(message)s')
 
         # now that we have our concurrency, create our client
-        self.client = httpclient.AsyncHTTPClient(max_clients=self.args.concurrent)
+        self.client = httpclient.AsyncHTTPClient(
+            max_clients=self.args.concurrent
+        )
 
         if self.args.number:
             return self.run_total()
@@ -111,7 +119,8 @@ class HTTPBenchmark(object):
         parser.print_help()
 
     def iscallable(self, inst):
-        return hasattr(inst, '__call__') or isinstance(inst, collections.Callable)
+        return hasattr(inst, '__call__') or \
+            isinstance(inst, collections.Callable)
 
     def debug_response(self, response):
         """
@@ -158,7 +167,8 @@ class HTTPBenchmark(object):
         self.done += 1
 
         # print a status every status_every percent
-        if ((self.done / float(self.args.number)) * 100) % self.status_every == 0:
+        percent = (self.done / float(self.args.number)) * 100
+        if percent % self.status_every == 0:
             self.log.info("Completed %d requests" % self.done)
 
         # if we're done then stop our ioloop and finish the run
@@ -166,7 +176,8 @@ class HTTPBenchmark(object):
             ioloop.IOLoop.instance().stop()
             self.finish_run()
 
-    def open_url(self, url, callback=None, code=200, params_in_results=False, **kwargs):
+    def open_url(self, url, callback=None, code=200, params_in_results=False,
+                 **kwargs):
         """
         Opens a URL, recording the time it takes & return the response
 
@@ -264,9 +275,8 @@ class HTTPBenchmark(object):
                     self.log.error("worker raised an exception", e)
                     raise
             else:
-                self.log.error("get_worker didn't return a valid callable object: {0}".format(
-                    worker
-                ))
+                self.log.error('get_worker didn\'t return a valid '
+                               'callable object: {0}'.format(worker))
 
         ioloop.IOLoop.instance().start()
 
@@ -297,10 +307,14 @@ class HTTPBenchmark(object):
 
             req_sec = len(self.results[url]) / total_time
 
-            self.log.info(" - Number of requests: {0}".format(len(self.results[url])))
-            self.log.info(" - Average request: {0} sec".format(round(numpy.average(times), 2)))
-            self.log.info(" - Total time spent: {0} sec".format(round(total_time, 2)))
-            self.log.info(" - Requests per second: {0}".format(round(req_sec, 2)))
+            self.log.info(" - Number of requests: {0}".format(
+                len(self.results[url])))
+            self.log.info(" - Average request: {0} sec".format(
+                round(numpy.average(times), 2)))
+            self.log.info(" - Total time spent: {0} sec".format(
+                round(total_time, 2)))
+            self.log.info(" - Requests per second: {0}".format(
+                round(req_sec, 2)))
 
             self.log.info(" - Completed request timing percentiles (ms)")
 
@@ -330,9 +344,16 @@ class HTTPBenchmark(object):
                     if len(new_base) > 1:
                         first = urllib.quote(new_base.pop(0))
                         rest = map(lambda x: urllib.quote(x), new_base)
-                        new_pair = "%s[%s]=%s" % (first, ']['.join(rest), urllib.quote(unicode(value)))
+                        new_pair = "%s[%s]=%s" % (
+                            first,
+                            ']['.join(rest),
+                            urllib.quote(unicode(value))
+                        )
                     else:
-                        new_pair = "%s=%s" % (urllib.quote(unicode(key)), urllib.quote(unicode(value)))
+                        new_pair = "%s=%s" % (
+                            urllib.quote(unicode(key)),
+                            urllib.quote(unicode(value))
+                        )
                     pairs.append(new_pair)
             return pairs
 
