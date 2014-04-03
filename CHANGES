@@ -1,6 +1,14 @@
 httpbenchmark changelog
 =======================
 
+Version 0.5
+Release: April 2nd, 2014
+
+* BACKWARDS INCOMPATIBLE CHANGES!
+* Moved to Tornado's new @gen.coroutine interface for code.
+* Sub-classes of HTTPBenchmark must now yield instead of using callbacks
+
+
 Version 0.4
 Released: April 1st, 2014
 

@@ -6,7 +6,7 @@ ab in that it supports a -n switch to specify the number of requests to make
 and a -c switch to specify how many concurrent users. 
 
 However, the true intended use is to subclass HTTPBenchmark and to override the
-``get_worker`` method to implement your own test logic. In this regard you can
+``worker`` method to implement your own test logic. In this regard you can
 think of HTTPBenchmark as a framework that allows you to build unit tests for
 your HTTP application that aim to stress a server as well. See the Worker Code
 section below.
@@ -44,6 +44,7 @@ using HTTPBenchmark
 .. code-block:: python
 
     from httpbenchmark import HTTPBenchmark
+    from tornado import gen
     import random
 
     USER_IDS = [1111, 2222, 3333, 4444]
@@ -51,55 +52,55 @@ using HTTPBenchmark
     _url = lambda x: ''.join(['http://my-host.tld/', x])
 
     class MyBenchmark(HTTPBenchmark):
-        def get_worker(self):
+        @gen.coroutine
+        def worker(self):
             '''
             get_worker should return a callable that will be called by the async http client
             '''
             if random.choice([True, False]):
-                return self.new_user
-            return self.returning_user
+                yield self.new_user()
+            else:
+                yield self.returning_user()
 
+        @gen.coroutine
         def new_user(self):
             user_id = random.choice(USER_IDS)
             self.log.debug("New user: %s" % user_id)
 
-            def handle_register(response, friends):
-                # ... handle registration response ...
+            friends = yield self.open_json(_url("register?uid=%d" % user_id))
+            # ... handle registration response ...
+            if failure:
+                self.log.error("Indicate reason for failure")
+                self.log.debug("Show debugging info if you want")
+                self.finish_request(False)
+            else:
+                yield self.next_step(user_id, friends['friendList'][0])
 
-                if failure:
-                    self.log.error("Indicate reason for failure")
-                    self.log.debug("Show debugging info if you want")
-                    return self.finish_request(False)
-
-                self.next_step(user_id, friends['friendList'][0])
-
-            self.open_json(_url("register?uid=%d" % user_id), handle_register)
-
+        @gen.coroutine
         def returning_user(self):
             user_id = random.choice(USER_IDS)
             self.log.debug("Returning user: %s" % user_id)
 
             def handle_login(response, friends):
-                # ... handle login response ...
+            friends = yield self.open_json(_url("login?uid=%d" % user_id))
+            # ... handle login response ...
+            if failure:
+                self.log.error("Indicate reason for failure")
+                self.log.debug("Show debugging info if you want")
+                self.finish_request(False)
+            else:
+                yield self.next_step(user_id, friends['friendList'][0])
 
-                if failure:
-                    self.log.error("Indicate reason for failure")
-                    self.log.debug("Show debugging info if you want")
-                    return self.finish_request(False)
-
-                self.next_step(user_id, friends['friendList'][0])
-
-           self.open_json(_url("login?uid=%d" % user_id), handle_login)
-
+        @gen.coroutine
         def next_step(self, user_id, friend_id):
             # ... do something else ...
             if failure:
                 self.log.error("Indicate reason for failure")
                 self.log.debug("Show debugging info if you want")
-                return self.finish_request(False)
-
-            # success!
-            return self.finish_request(True)
+                self.finish_request(False)
+            else:
+                # success!
+                self.finish_request()
 
     if __name__ == '__main__':
         MyBenchmark().main()
@@ -108,17 +109,23 @@ using HTTPBenchmark
 Essentials
 ^^^^^^^^^^
 
-* ``get_worker`` should return a callable that will be used by the async HTTP
-  client. Whenever the client has a free slot based on the concurrency limits
-  it will invoke your worker function.
+* This uses `Tornado's async generator interface`_ to achive concurrency, your
+  functions need to be wrapped in ``@gen.coroutine`` and you should ``yield``
+  between them.
 
-* ``self.get(url, callback)`` is used to make a GET request, pass a callable
-  to the callback argument and it will receive the response object back as an
-  argument when the operations completes.
+* ``worker`` is where your main code lives. It will be called whenever there
+  is a free slot based on concurrency.
+
+* ``yield self.get(url, code=200)`` is used to make a GET request. You will
+  get the response object back when the operation completes.
 
 * ``self.post(url, params={}, callback)`` is used to POST data. ``params``
   should be a dictionary and will be sent as the POST data. It functions
   the same as ``get`` otherwise.
+
+* If you're posting to a PHP backend and need to use PHP's neseted array
+  syntax for parameters you pass ``php_urlencode`` to the ``self.post`` method
+  with a value of ``True`` and it will encode the params accordingly.
 
 * ``self.get_json(url, callback)`` is a shortcut for getting and parsing json
   data that is returned. Your callback should accept two arguments, the first
@@ -137,3 +144,5 @@ TODO
 ----
 
 * Add some working examples
+
+.. _Tornado's async generator interface: http://www.tornadoweb.org/en/stable/gen.html

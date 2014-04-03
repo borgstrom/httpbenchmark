@@ -319,11 +319,8 @@ class HTTPBenchmark(object):
             self.log.info("")
 
     def php_urlencode(self, d):
-        """URL-encode a multidimensional dictionary.
-
-        >>> data = {'a': 'b&c', 'd': {'e': {'f&g': 'h*i'}}, 'j': 'k'}
-        >>> recursive_urlencode(data)
-        u'a=b%26c&j=k&d[e][f%26g]=h%2Ai'
+        """
+        URL-encode a multidimensional dictionary.
         """
         def recursion(d, base=[]):
             pairs = []
