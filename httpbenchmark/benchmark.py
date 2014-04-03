@@ -16,6 +16,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import argparse
 import collections
 import json
 import logging
@@ -23,7 +24,7 @@ import numpy
 import time
 import urllib
 
-from tornado import ioloop, httpclient
+from tornado import ioloop, httpclient, gen
 
 from . import __version__
 
@@ -61,7 +62,6 @@ class HTTPBenchmark(object):
         """
         Handles invocation
         """
-        import argparse
         parser = argparse.ArgumentParser(
             description='pb - Python HTTP benchmarking tool'
         )
@@ -106,9 +106,7 @@ class HTTPBenchmark(object):
                                 format='%(message)s')
 
         # now that we have our concurrency, create our client
-        self.client = httpclient.AsyncHTTPClient(
-            max_clients=self.args.concurrent
-        )
+        self.client = httpclient.AsyncHTTPClient()
 
         if self.args.number:
             return self.run_total()
@@ -117,10 +115,6 @@ class HTTPBenchmark(object):
 
         # bail out
         parser.print_help()
-
-    def iscallable(self, inst):
-        return hasattr(inst, '__call__') or \
-            isinstance(inst, collections.Callable)
 
     def debug_response(self, response):
         """
@@ -142,17 +136,13 @@ class HTTPBenchmark(object):
         print '---------'
         print data
 
-    def get_worker(self):
-        """
-        Returns a callable that will be used by the worker
-        """
-        return self.default_worker
-
-    def default_worker(self):
+    @gen.coroutine
+    def worker(self):
         """
         The default worker - opens the URL.
         """
         self.open_url(self.args.url)
+        self.finish_request()
 
     def finish_request(self, success=True):
         """
@@ -165,6 +155,7 @@ class HTTPBenchmark(object):
             self.failed += 1
 
         self.done += 1
+        self.running -= 1
 
         # print a status every status_every percent
         percent = (self.done / float(self.args.number)) * 100
@@ -176,8 +167,8 @@ class HTTPBenchmark(object):
             ioloop.IOLoop.instance().stop()
             self.finish_run()
 
-    def open_url(self, url, callback=None, code=200, params_in_results=False,
-                 **kwargs):
+    @gen.coroutine
+    def open_url(self, url, code=200, params_in_results=False, **kwargs):
         """
         Opens a URL, recording the time it takes & return the response
 
@@ -185,62 +176,59 @@ class HTTPBenchmark(object):
         params_in_results controls if '/test' & '/test?1=2' should be
         stored in the results as the same item
         """
-        def handle_response(response):
-            url = response.request.url
+        response = yield self.client.fetch(url, **kwargs)
 
-            # check if we need to strip params off the url before we store
-            # the results
+        # check if we need to strip params off the url before we store
+        # the results
+        if not params_in_results:
             url_params = url.find("?")
-            if not params_in_results and url_params > -1:
+            if url_params > -1:
                 url = url[:url_params]
 
-            # store the results
-            self.results[url].append(response.time_info)
+        # store the results
+        self.results[url].append(response.time_info)
 
-            # ensure the status code is correct
-            if response.code != code:
-                return self.finish_request(False)
+        # ensure the status code is correct
+        if response.code != code:
+            self.finish_request(False)
+        else:
+            # otherwise "return" our response
+            raise gen.Return(response)
 
-            if self.iscallable(callback):
-                # if we have another call back pass the response along
-                return callback(response)
-            else:
-                # otherwise signal success
-                return self.finish_request(True)
+    @gen.coroutine
+    def get(self, url, code=200, params_in_results=False):
+        response = yield self.open_url(
+            url,
+            code=code,
+            params_in_results=params_in_results
+        )
+        raise gen.Return(response)
 
-        self.client.fetch(url, handle_response, **kwargs)
-
-    def get(self, url, callback=None, code=200, params_in_results=False):
-        return self.open_url(url, callback, code, params_in_results)
-
-    def post(self, url, params={}, callback=None, code=200,
-             php_urlencode=False):
+    @gen.coroutine
+    def post(self, url, params={}, code=200, php_urlencode=False):
         if php_urlencode:
             body = self.php_urlencode(params)
         else:
             body = urllib.urlencode(params)
 
-        return self.open_url(url, callback, code,
-                             method="POST",
-                             body=body)
+        response = yield self.open_url(
+            url,
+            code=code,
+            method="POST",
+            body=body
+        )
+        raise gen.Return(response)
 
-    def get_json(self, url, callback):
-        def handle_json(response):
-            headers = response.headers
+    @gen.coroutine
+    def get_json(self, url):
+        response = yield self.open_url(url)
 
-            # it should be json
-            if "Content-Type" not in headers or \
-                    headers["Content-Type"] != 'application/json':
-                self.debug_response(response)
-                raise ValueError("Content-Type didn't match JSON")
+        # it should be json
+        if response.headers.get('Content-Type') != 'application/json':
+            self.debug_response(response)
+            raise ValueError("Content-Type didn't match JSON")
 
-            try:
-                callback(response, json.loads(response.body))
-            except ValueError:
-                self.debug_response(response)
-                raise
-
-        self.open_url(url, handle_json)
+        raise gen.Return(json.loads(response.body))
 
     def run_time(self):
         raise Exception("Sorry, this hasn't been implemented yet!")
@@ -254,6 +242,7 @@ class HTTPBenchmark(object):
         self.done = 0
         self.successful = 0
         self.failed = 0
+        self.running = 0
 
         self.status_every = 50
         if self.args.number >= 100:
@@ -265,25 +254,35 @@ class HTTPBenchmark(object):
         elif self.args.number >= 25000:
             self.status_every = 2.5
 
-        for x in xrange(self.args.number):
-            # get_worker will return a callable
-            worker = self.get_worker()
-            try:
-                worker()
-            except TypeError:
-                self.log.error("get_worker did not return a callable object, "
-                               "fix your code!")
-                raise
+        loop = ioloop.IOLoop.instance()
+        loop.add_callback(self.run_workers)
+        loop.start()
 
-        ioloop.IOLoop.instance().start()
+    @gen.coroutine
+    def run_workers(self):
+        loop = ioloop.IOLoop.instance()
+
+        if self.running < self.args.concurrent:
+            # only start a new worker if doing so wont create more workers
+            # than we need to complete our total
+            if self.args.number - self.done > self.running:
+                self.running += 1
+                self.worker()
+
+        loop.add_callback(self.run_workers)
 
     def finish_run(self):
         end = time.time()
         total_time = end - self.start
+        req_sec = self.args.number / total_time
 
         self.log.info("Test took: {0} seconds".format(total_time))
         self.log.info("Successful requests: {0}".format(self.successful))
         self.log.info("Failed requests: {0}".format(self.failed))
+        self.log.info("Number of HTTP requests: {0}".format(
+            self.successful * len(self.results)))
+        self.log.info("HTTP Requests per second: {0}".format(
+            round(req_sec, 2)))
         self.log.info("")
 
         self.log.info("Summary:")
@@ -300,18 +299,15 @@ class HTTPBenchmark(object):
             #  'total': 0.020902,
             #  'namelookup': 3.1999999999999999e-05}
 
-            times = [t['total'] for t in self.results[url]]
-
-            req_sec = len(self.results[url]) / total_time
+            times = [
+                timing['total']
+                for timing in self.results[url]
+            ]
 
             self.log.info(" - Number of requests: {0}".format(
                 len(self.results[url])))
             self.log.info(" - Average request: {0} sec".format(
                 round(numpy.average(times), 2)))
-            self.log.info(" - Total time spent: {0} sec".format(
-                round(total_time, 2)))
-            self.log.info(" - Requests per second: {0}".format(
-                round(req_sec, 2)))
 
             self.log.info(" - Completed request timing percentiles (ms)")
 
